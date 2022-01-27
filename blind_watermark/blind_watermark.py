@@ -20,15 +20,13 @@ class WaterMark:
 
         self.password_wm = password_wm
 
-        self.alpha = None  # 用于处理透明图
+        self.alpha = None  # image's third dimension
 
-    def read_img(self, filename):
-        # 读入图片
+    def read_img(self, filename: str):
         img = cv2.imread(filename, flags=cv2.IMREAD_UNCHANGED)
-        if img is None:
-            raise IOError("image file '{filename}' not read".format(filename=filename))
+        if not img:
+            raise IOError(f"Image file '{filename}' not read")
 
-        # 处理透明图
         self.alpha = None
         if img.shape[2] == 4 and img[:, :, 3].min() < 255:
             self.alpha = img[:, :, 3]
@@ -39,12 +37,12 @@ class WaterMark:
 
     def read_img_wm(self, filename):
         wm = cv2.imread(filename)
-        if wm is None:
-            raise IOError("file '{filename}' not read".format(filename=filename))
+        if not wm:
+            raise IOError(f"Image file '{filename}' not read")
 
-        # 读入图片格式的水印，并转为一维 bit 格式
+        # Convert the watermark in one-dimensional bit format
         self.wm = wm[:, :, 0]
-        # 加密信息只用bit类，抛弃灰度级别
+        # Encrypted information only uses the bit class, discarding the gray level
         self.wm_bit = self.wm.flatten() > 128
 
     def read_wm(self, wm_content, mode="img"):
@@ -53,12 +51,14 @@ class WaterMark:
         elif mode == "str":
             byte = bin(int(wm_content.encode("utf-8").hex(), base=16))[2:]
             self.wm_bit = np.array(list(byte)) == "1"
-        else:
+        elif mode == "array":
             self.wm_bit = np.array(wm_content)
+        else:
+            raise ValueError(f"The reading watermark mode '{mode} is not supported.'")
 
         self.wm_size = self.wm_bit.size
 
-        # 水印加密:
+        # watermark encryption:
         np.random.RandomState(self.password_wm).shuffle(self.wm_bit)
 
         self.bwm_core.read_wm(self.wm_bit)
@@ -87,10 +87,10 @@ class WaterMark:
         else:
             wm_avg = self.bwm_core.extract(img=img, wm_shape=wm_shape)
 
-        # 解密：
+        # decrypt
         wm = self.extract_decrypt(wm_avg=wm_avg)
 
-        # 转化为指定格式：
+        # Convert to the specified format：
         if mode == "img":
             cv2.imwrite(out_wm_name, 255 * wm.reshape(wm_shape[0], wm_shape[1]))
         elif mode == "str":
